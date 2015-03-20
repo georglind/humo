@@ -6,3 +6,5 @@ Currently the focus is to build a complete suite for exact diagonalization of fi
 ## Documentation
 
 The suite is currently rather undocumented. As a small intro consider looking at my [PhD dissertation](http://georglind.dk/phd/KimGLPedersen-PhDThesis-web-final.pdf).
+
+Also take a look at the [notebooks](notebooks) directory, where some examples will be included.
