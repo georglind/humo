@@ -98,13 +98,15 @@ Returns
     Spin-degeneracy of each level: [1.0, 3.0, 3.0, 3.0, 1.0, 1.0, 3.0, 3.0, 1.0, 3.0]
 
 
+#### Solving with 8 electrons
 
-    # Let us solve the system with 8 electrons
     mbenz8 = xore.ChargeState(q, 8)
     mbenz8.solve()
     print('')
     print('Energy of 10 lowest lying states: {0}'.format([round(s['E'],2) for s in mbenz8.eigenstates]))
     print('Spin-degeneracy of each level: {0}'.format([s['d'] for s in mbenz8.eigenstates]))
+
+Returns
 
     Solved PiSystem - ne=8 charge state - lowest 10 states - Sz=0.0 to 1.0
     
