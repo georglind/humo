@@ -20,6 +20,25 @@ import lanczos
 # Calculate resolvents by Lanczos inversion algorithm.
 
 
+def elastic_amplitude(chs, multiplet, im, ip, omegas, eta,
+                      iterations, functional=False):
+
+    ampls = elastic_amplitudes(chs, multiplet, im, ip, omegas, eta,
+                               iterations, functional=False)
+
+    amp = np.zeros(ampls['W'][0].shape, dtype=np.float)
+
+    for i, W in enumerate(ampls['W']):
+        pre = 1 if i == 0 else 2
+        amp += pre*W
+
+    for i, J in enumerate(ampls['J']):
+        pre = 1 if i == 0 else 2
+        amp += pre*J
+
+    return amp
+
+
 def elastic_amplitudes(chs, multiplet, im, ip, omegas, eta,
                        iterations, functional=False):
     """
@@ -58,25 +77,39 @@ def elastic_amplitudes(chs, multiplet, im, ip, omegas, eta,
 
     for i, W in enumerate(coeffs['W']):
 
-        ampls['W'][i] = map(
-            lambda w: amplitude(w, Es, eta, W[0], W[3]),
-            omegas)
+        ampls['W'][i] = amplitude(omegas, Es, eta, W[0], W[3])
 
         if W[1] is not None:
-            ampls[i] += map(
-                lambda w: amplitude(w, Es, eta, W[1], W[2]),
-                omegas)
+            ampls[i] += amplitude(omegas, Es, eta, W[1], W[2])
 
+    ampls['J'] = [0]*len(coeffs['J'])
     if len(coeffs['J']) > 0:
         ampls['J'] = [0*len(coeffs['J'])]
 
         for i, J in enumerate(coeffs['J']):
 
-            ampls['J'][i] = map(
-                lambda w: amplitude(w, Es, eta, J[0], J[1]),
-                omegas)
+            ampls['J'][i] = amplitude(omegas, Es, eta, J[0], J[1])
 
     return ampls
+
+
+def ineleastic_amplitude(chs, aplet, bplet, im, ip, omegas, eta,
+                         iterations, functional=False):
+
+    ampls = inelastic_amplitudes(chs, aplet, bplet, im, ip, omegas, eta,
+                                 iterations, functional=False)
+
+    amp = np.zeros(ampls['W'].shape, dtype=np.float)
+
+    for i, W in enumerate(ampls['W']):
+        pre = 1 if i == 0 else 2
+        amp += pre*W
+
+    for i, J in enumerate(ampls['J']):
+        pre = 1 if i == 0 else 2
+        amp += pre*J
+
+    return amp
 
 
 def inelastic_amplitudes(chs, aplet, bplet, im, ip, omegas, eta,
@@ -135,7 +168,7 @@ def inelastic_amplitudes(chs, aplet, bplet, im, ip, omegas, eta,
     return ampls
 
 
-def amplitude(omega, energies, eta, pes, ipes):
+def amplitude(omegas, energies, eta, pes, ipes):
     """
     Return the amplitude as a function of energy.
 
@@ -164,27 +197,29 @@ def amplitude(omega, energies, eta, pes, ipes):
 
     A = B = 0
     # for i, _ in xange(len(pes)):
-    A += amplitude_real(omega + Epes, etas[0], pes) - \
-        amplitude_real(-omega + Eipes, -etas[1], ipes)
-    B += amplitude_imag(omega + Epes, etas[0], pes) - \
-        amplitude_imag(-omega + Eipes, -etas[1], ipes)
+    A += amplitude_real(omegas + Epes, etas[0], pes) - \
+        amplitude_real(-omegas + Eipes, -etas[1], ipes)
+    B += amplitude_imag(omegas + Epes, etas[0], pes) - \
+        amplitude_imag(-omegas + Eipes, -etas[1], ipes)
 
-    return A**2 + B**2
+    return np.abs(A)**2 + np.abs(B)**2
 
 
-def amplitude_real(omega, eta, gp):
+def amplitude_real(omegas, eta, gp):
     """
     The real part of the propagator
     """
 
-    A = lanczos.continued_fraction(
-        omega + 1j*eta - gp['ase'],
+    A = lanczos.continued_fraction_vectorized(
+        omegas,
+        1j*eta - gp['ase'],
         gp['bse']
     ) * gp['wve']
 
     if 'aso' in gp:
-        A += -lanczos.continued_fraction(
-            omega + 1j*eta - gp['aso'],
+        A += -lanczos.continued_fraction_vectorized(
+            omegas,
+            1j*eta - gp['aso'],
             gp['bso']
         ) * gp['wvo']
         A /= 4
@@ -192,18 +227,20 @@ def amplitude_real(omega, eta, gp):
     return A
 
 
-def amplitude_imag(omega, eta, gp):
+def amplitude_imag(omegas, eta, gp):
     """
     Iamginary part of the propagator
     """
     B = 0
     if 'asem' in gp:
-        B = lanczos.continued_fraction(
-            omega + 1j*eta - gp['asem'],
+        B = lanczos.continued_fraction_vectorized(
+            omegas,
+            1j*eta - gp['asem'],
             gp['bsem']
         ) * gp['wvem']
-        B += - lanczos.continued_fraction(
-            omega + 1j*eta - gp['asom'],
+        B += - lanczos.continued_fraction_vectorized(
+            omegas,
+            1j*eta - gp['asom'],
             gp['bsom']
         ) * gp['wvom']
         B /= 4
@@ -247,8 +284,9 @@ def elastic_coefficients(chs, multiplet, im, ip,
 
     coeffs['J'] = [0]*(reps - (chs.ne + 1) % 2)  # spin change amplitudes
 
-    dJ = 0  # index change
     if chs.ne % 2 == 1:          # if we have an odd number electrons
+        dJ = 0  # index change
+
         nL = multiplet['ns'][0]  # nu - nd = +1
         ketL = xore.State(multiplet['V'][0],
                           nu=nL[0], nd=nL[1])  # state m =.5
@@ -262,16 +300,16 @@ def elastic_coefficients(chs, multiplet, im, ip,
         dJ = 1
         coeffs.append(0)
 
-    for i in xrange(reps-1):  # spin change amplitudes
-        ns, state = (multiplet['n'][i], multiplet['V'][i])
-        ketR = xore.State(state, chs.humo.n, nu=ns[0]+1, nd=ns[1]-1)
+        for i in xrange(reps-1):  # spin change amplitudes
+            ns, state = (multiplet['n'][i], multiplet['V'][i])
+            ketR = xore.State(state, chs.humo.n, nu=ns[0]+1, nd=ns[1]-1)
 
-        ns, state = (multiplet['n'][i+1], multiplet['V'][i+1])
-        ketL = xore.State(state, chs.humo.n, nu=ns[0], nd=ns[1])
+            ns, state = (multiplet['n'][i+1], multiplet['V'][i+1])
+            ketL = xore.State(state, chs.humo.n, nu=ns[0], nd=ns[1])
 
-        coeffs['J'][i+dJ] = \
-            exchange_coefficients(chs, ns, ketL, ketR, im, ip,
-                                  iterations, functional)
+            coeffs['J'][i+dJ] = \
+                exchange_coefficients(chs, ns, ketL, ketR, im, ip,
+                                      iterations, functional)
 
     return coeffs
 

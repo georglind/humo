@@ -151,3 +151,27 @@ def continued_fraction(a, b, maxiter=None):
         f = a[i] - b[i]**2/f
 
     return 1/f
+
+
+def continued_fraction_vectorized(xs, a, b, maxiter=None):
+    """
+    Evaluate matrix elements from Lanczos inversion coefficients.
+
+    Parameters
+    ----------
+    a : ndarray
+        the a coefficients
+    b : ndarray
+        the b coefficients
+    maxiter : int
+        maximum number of iterations
+    """
+    cutoff = len(a)
+    if maxiter is not None:
+        cutoff = np.min(cutoff, maxiter)
+
+    f = np.ones(xs.shape, dtype=np.complex128)
+    for i in xrange(cutoff-1, -1, -1):
+        f = xs + a[i] - b[i]**2/f
+
+    return 1/f
