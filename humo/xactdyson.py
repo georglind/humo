@@ -42,21 +42,22 @@ def FDOs(csf, csi, ini=(0, 1), fini=(0, 10)):
                     # calculate the dyson orbital
                     orbs[i][ii][f][ff] = \
                         FDO(xore.State(ef, csf.humo.n, nu=nf[0], nd=nf[1]),
-                            xore.State(ei, csi.humo.n, nu=ni[0], nd=ni[0]))
+                            xore.State(ei, csi.humo.n, nu=ni[0], nd=ni[1]))
 
     return orbs
 
 
 def FDO(sf, si):
     """
-    Return the Feynman Dyson overlap between state |f> and state |i>.
+    Return the Feynman-Dyson overlap orbitals between final state |f>
+    and initial state |i>.
 
     Parameters
     ----------
     f : Object
-        State object
+        Final state object
     i : Object
-        State object
+        Initial state object
     """
     dn = np.array([sf.nu - si.nu, sf.nd - si.nd])
 
@@ -121,6 +122,9 @@ def drawFDOS(humo, orbs, Esi, Esf, superscript=''):
 
 # Extend the ChargeState
 def ChargeStateFDOs(self, pm, ini=None, fini=None):
+    """
+    Calculate Feynman-Dyson orbitals for a given charge state
+    """
     csf = xore.ChargeState(self.humo, self.ne + pm)
 
     if ini is None:
@@ -145,6 +149,9 @@ xore.ChargeState.FDOs = ChargeStateFDOs
 
 # extend the ChargeState
 def ChargeStateDrawFDOs(self, pm, ini=None, fini=None):
+    """
+    Draw Feynman-Dyson orbitals for a given charge state
+    """
     orbs = self.FDOs(pm, ini, fini)
 
     Esi = [pm*s['E'] for s in self.eigenstates]

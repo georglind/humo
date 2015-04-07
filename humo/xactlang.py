@@ -198,9 +198,9 @@ def amplitude(omegas, energies, eta, pes, ipes):
     A = B = 0
     # for i, _ in xange(len(pes)):
     A += amplitude_real(omegas + Epes, etas[0], pes) - \
-        amplitude_real(-omegas + Eipes, -etas[1], ipes)
+        amplitude_real(-omegas + Eipes, etas[1], ipes)
     B += amplitude_imag(omegas + Epes, etas[0], pes) - \
-        amplitude_imag(-omegas + Eipes, -etas[1], ipes)
+        amplitude_imag(-omegas + Eipes, etas[1], ipes)
 
     return np.abs(A)**2 + np.abs(B)**2
 

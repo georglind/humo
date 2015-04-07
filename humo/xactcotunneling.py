@@ -4,6 +4,7 @@ import numpy as np
 import warnings
 import xactcore as xore
 import xactlang as lang
+import matplotlib.pyplot as plt
 
 #      $$$$$$\   $$$$$$\ $$$$$$$$\ $$\   $$\ $$\   $$\
 #     $$  __$$\ $$  __$$\\__$$  __|$$ |  $$ |$$$\  $$ |
@@ -34,9 +35,6 @@ def fermi_selector(Es, dE, V, Ts):
     FdR = fermi_function(Es + dE, VR, TR)
 
     return (1-FdR)*FL - (1-FdL)*FR
-
-
-
 
 
 class Transport:
@@ -142,17 +140,32 @@ class Transport:
 
         return ampls
 
+    def currents(self, c, im, ip, Ts, Vgs=None, Vs=None,
+                 iterations=False, functional=False):
 
-    def current(self, c, im, ip, Ts, Vgs=None, Vs=None,
-                iterations=False, functional=False):
+        cutoff = np.max(Vs) + 2*max(Ts)
 
-        ampls = Transport.amplitudes(self.chs[c], (im, ip), omegas, eta,
-            cutoff=np.max(Vs) + 2*max(Ts), iterations=iterations, functional=False)
+        # calculate omegas
+        omegas = 0
 
+        ampls = Transport.amplitudes(self.chs[c], (im, ip), omegas, eta, cutoff, iterations, functional)
 
-        fermi_selector()
+        curs = np.zeros((len(Vs), len(Vgs)), dtype=np.float64)
+        for i, V in enumerate(Vs):
+            for j, Vg in enumerate(Vgs):
+                curs[i, j] = self.current(c, omegas, ampls, im, ip, Ts, Vg, V,
+                                          iterations, functional)
 
-        return curr
+        return curs
+
+    def current(self, c, omegas, ampls, im, ip, Ts, Vg, V, iterations=False, functional=False):
+
+        cur = 0
+        for i, aplet in enumerate(self.chs[c].eigenstates):
+            for j, bplet in enumerate(self.chs[c].eigenstates):
+                cur += np.vdot(fermi_selector(omegas - Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
+
+        return cur
 
     def diamond(self, c, im, ip, Ts, Vgs=None, Vs=None,
                 iterations=False, functional=False):
@@ -187,13 +200,14 @@ class Transport:
             bias = self.bias(c)
             Vs = np.linspace(bias[0], bias[1], 1000)
 
-        didv = lang.didv(self.chs[c], [im, ip], Vgs, Vs, Ts,
-                         iterations, functional)
+        curs = self.currents(self.chs[c], [im, ip], Vgs, Vs, Ts,
+                             iterations, functional)
 
-        return didv
+        return np.diff(curs, axis=1)
 
     def zerobias(self, c, im, ip, Ts, iterations=False, functional=False):
 
         return self.diamond(c, im, ip, Ts, Vs=np.array([0, 1e-4]),
                             iterations=iterations, functional=functional)
+
 # humo.HubbardModel.transport = transport
