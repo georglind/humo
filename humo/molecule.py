@@ -53,7 +53,7 @@ class PiSystem(HubbardModel):
 
     # model parameters
     ohno_pars = {
-        'C': {'ts': -2.22, 'td': -2.684, 'E':      0, 'U': 10.86, 'z': 1, 'tb': -2.539},
+        'C' : {'ts': -2.22, 'td': -2.684, 'E':      0, 'U': 10.86, 'z': 1, 'tb': -2.539},
         'O' : {'ts':  -1.5, 'td':   -2.4, 'E':  -9.78, 'U': 18.89, 'z': 1},
         'O:': {'ts':  -1.5, 'td':   -2.4, 'E':  -9.78, 'U': 18.89, 'z': 1},
         'N' : {'ts': -2.05, 'td':  -2.05, 'E':   -3.4, 'U': 14.97, 'z': 1},
@@ -193,6 +193,14 @@ class PiSystem(HubbardModel):
             HT[link[0], link[1]] = t
 
         H1T = HT + HT.T
+
+        # detect aromatic phenyl circles and implement them 
+        # in the hopping Hamiltonian
+        phenyls = PiSystem.phenyls(atoms, links, H1T)
+        for cycle in phenyls:
+            for i in xrange(6):
+                H1T[cycle[i], cycle[(i+1) % 6]] = pars['C']['tb']
+                H1T[cycle[(i+1) % 6], cycle[i]] = pars['C']['tb']
 
         # interactions
         U = pars['C']['U']
@@ -392,7 +400,132 @@ class PiSystem(HubbardModel):
                 ax.add_artist(circle)
                 ax.text(x, y, '{0}'.format(i), zorder=20, ha='center', va='center')
 
-        fig.show()
+        plt.show()
+
+    @staticmethod
+    def phenyls(atoms, links, H1T):
+        """
+        Find all phenylic rings within a molecule.
+        """
+        phenyls = []
+        sixrings = [cyc for cyc in Graph.cycles(H1T) if len(cyc) == 6]
+        for ring in sixrings:
+            carbons = True
+            alternation = [0, 0]
+            for i in xrange(6):
+                if atoms[ring[i]] != 'C':
+                    carbons = False
+                    break
+                for link in links:
+                    if (link[0] == ring[i] and link[1] == ring[(i+1) % 6]) or \
+                       (link[1] == ring[i] and link[0] == ring[(i+1) % 6]):
+                        alternation[i % 2] += link[2] - 1
+            if carbons and np.abs(alternation[0] - alternation[1]) == 3:
+                phenyls.append(ring)
+
+        return phenyls
+
+
+class Graph:
+    """
+    Simple class for analyzing the molecular graph
+    """
+    @staticmethod
+    def cycles(A):
+        """
+        Return a list of smaller cycles described by adjencecy matrix A.
+        """
+        rcycs, _ = Graph.branches(A)
+
+        Nc = len(rcycs)
+
+        # First we clean the cycles
+        ccycs = []
+        for i in xrange(Nc):
+            j = 0
+            while rcycs[i][j] == rcycs[i][-j-1]:
+                j += 1
+            ccycs.append(rcycs[i][j-1:-j])
+
+        # retain only the smallest cycle representation of the graph
+        cycles = []
+        appended = [False]*Nc
+        for i in xrange(Nc):
+            for j in xrange(i):
+                ncycs = Graph.cycleincycle(ccycs[i], ccycs[j])
+                if len(ncycs) > 1:
+                    cycles.append(ncycs[0]).append(ncycs[1])
+
+        # append additional cycles
+        for i in xrange(Nc):
+            if not appended[i]:
+                cycles.append(ccycs[i])
+
+        return cycles
+
+    @staticmethod
+    def cycleincycle(c1, c2):
+        """
+        Detects whether two cycles lie wihtin one another.
+        """
+        if len(c1) < len(c2):
+            c2, c1 = c1, c2  # c1 is always containing c2
+
+        cn = 0
+
+        if True:
+            return []
+
+        return cn, c2
+
+    @staticmethod
+    def branches(A):
+        """
+        Return list of cycles in graph described by adjacency matrix A.
+        """
+        N = A.shape[0]  # Number of nodes
+        links = np.transpose(np.nonzero(A))  # array of links
+
+        visited = [False]*N  # mark visited sites
+        visited[0] = True
+
+        branches = []
+        asches = [[0]]
+        while not all(visited):
+            ches = []
+            for branch in asches:
+                hits = list(links[links[:, 0] == branch[-1], 1]) \
+                    + list(links[links[:, 1] == branch[-1], 0])
+                if len(hits) <= 2:
+                    branches.append(branch)
+                else:
+                    for hit in set(hits):
+                        if not visited[hit]:
+                            ches.append(branch + [hit])
+                            visited[hit] = True
+                        elif len(branch) > 1 and branch[-2] != hit:
+                            branches.append(branch + [hit])
+            asches = ches
+        branches += asches
+
+        endtwo = [branch[-2] for branch in branches]
+        endone = [branch[-1] for branch in branches]
+
+        cycles = []
+        Nb = len(branches)
+        appended = [False]*Nb
+        for i in xrange(Nb):
+            for j in xrange(i):
+                if endone[i] == endtwo[j] and endone[j] == endtwo[i]:
+                    cycles.append(branches[i][:] + list(reversed(branches[j][:-2])))
+                    appended[i], appended[j] = True, True
+
+        chains = []
+        for i in xrange(Nb):
+            if not appended[i]:
+                chains.append(branches[i])
+
+        return cycles, chains
 
 
 # This class provides the functionality we want. You only need to look at
@@ -407,12 +540,12 @@ class switch(object):
         """Return the match method once, then stop"""
         yield self.match
         raise StopIteration
-    
+
     def match(self, *args):
         """Indicate whether or not to enter a case suite"""
         if self.fall or not args:
             return True
-        elif self.value in args: # changed for v1.5, see below
+        elif self.value in args:  # changed for v1.5, see below
             self.fall = True
             return True
         else:
