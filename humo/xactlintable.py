@@ -200,7 +200,10 @@ def de2bi(decimals, n=None):
         number of binary digits
     """
     decimals = np.array(decimals)
-    nd = np.ceil(np.log2(np.max(decimals)))
+    try:
+        nd = np.ceil(np.log2(np.max(decimals)))
+    except RuntimeWarning:
+        print('{0}:{1}'.format(decimals, n))
     if n is None or n < nd:
         n = nd
     return np.remainder(np.floor(np.outer(decimals, np.power(2., np.arange(1-n,1)))), 2).astype(int)

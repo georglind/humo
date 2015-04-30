@@ -8,10 +8,10 @@ class Kondo:
         return True
 
     def lnTkD(JLL, JLR, JRR):
-    	return True
+        return True
 
         # function [T1 T2] = lnTkD(JLL,JLR,JRR)
-        #     %  g0 
+        #     %  g0
         #     g0 = (JLL+JRR)./2;
         #     %  n
         #     nx = real(JLR);
@@ -24,8 +24,8 @@ class Kondo:
         #     T2 = -1./(g0-n);
         # end
 
-      def poor_mans_scaling(T, JLL, JLR, JRR):
-      	return True
+    def poor_mans_scaling(T, JLL, JLR, JRR):
+        return True
         # function [JsLL,JsLR,JsRR] = scaling(T,JLL,JLR,JRR)
 
         #     g0 = (JLL+JRR)/2;

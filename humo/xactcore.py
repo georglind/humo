@@ -127,8 +127,8 @@ class ChargeState:
                     verbal)  # verbal
                 return
 
-        nu = np.ceil(self.ne/2)
-        nd = np.floor(self.ne/2)
+        nu = int(np.ceil(self.ne/2))
+        nd = int(np.floor(self.ne/2))
 
         sz0 = SzState(self.humo, nu, nd)  # lowest sz spin state
         w, v = sz0.solve(ns=ns)  # get the <ns> lowest states
@@ -187,14 +187,16 @@ class ChargeState:
         while any(active):
             ds += 1                                 # spin pre increment
 
-            Sp = Splus(nu+ds, nd-ds, n)   # construct splus
+            Sp = Splus(nu+ds, nd-ds, n)             # construct splus
             v = Sp.dot(v)                           # resulting array
 
             weights = np.sqrt(np.sum(np.abs(v)**2, axis=0))
 
             # update index of surviving multiplet
             active[active] = weights > 0.5
+
             v = v[:, weights > 0.5]                 # surviving states
+            weights = weights[weights > 0.5]        # surviving weights
 
             if any(active):
                 for i, idx in enumerate(np.flatnonzero(active)):

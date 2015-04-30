@@ -2,9 +2,10 @@ from __future__ import division, print_function
 
 import numpy as np
 import warnings
+import pyprind
 import xactcore as xore
 import xactlang as lang
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 #      $$$$$$\   $$$$$$\ $$$$$$$$\ $$\   $$\ $$\   $$\
 #     $$  __$$\ $$  __$$\\__$$  __|$$ |  $$ |$$$\  $$ |
@@ -18,13 +19,15 @@ import matplotlib.pyplot as plt
 
 def fermi_function(Es, mu, T):
     """
-    Fermi-Dirac Statistics
+    Fermi-Dirac Statistics distribution
     """
     return 1/(np.exp((Es-mu)/T)+1)
 
 
 def fermi_selector(Es, dE, V, Ts):
-
+    """
+    Return a fermi-selector function: f_L(E) (1 - f_R(E))
+    """
     VL, VR = V/2, - V/2
     TL, TR = Ts
 
@@ -47,7 +50,7 @@ class Transport:
 
         for c in cs:
             self.cs[c] = xore.ChargeState(humo, c)
-            self.cs[c].solve(ns=1)
+            self.cs[c].solve(ns=10)
 
     def gate(self, c):
         """
@@ -120,8 +123,14 @@ class Transport:
 
         states = [c for c in chs.eigenstates if c['E'] - chs.eigenstates[0]['E'] < cutoff]
 
+        #progress bar
+        progress = pyprind.ProgBar(len(states)**2,
+                                   monitor=True,
+                                   title="Amplitudes")
+
         ampls = [None]*len(states)
         for i, aplet in enumerate(states):
+            ampls[i] = [None]*len(states)
             for j, bplet in enumerate(states):
                 if i == j:
                     ampls[i][i] = lang.elastic_amplitude(
@@ -141,34 +150,137 @@ class Transport:
                         iterations,
                         functional)
 
+                progress.update()  # update progress bar
+
         return ampls
+
+    def amplitudess(self, c, imp, eta, cutoff, iterations, functional=False):
+        """
+        Solves the occupations from rate equations
+        """
+        im, ip = imp
+
+        omegas = 0
+
+        # different site amplitudes:
+        amplsmp = Transport.amplitudes(self.cs[c], (im, ip), omegas, eta, cutoff,
+                                       iterations, functional)
+
+        # same site amplitudes:
+        amplsmm = Transport.amplitudes(self.cs[c], (im, im), omegas, eta, cutoff,
+                                       iterations, functional)
+        amplspp = Transport.amplitudes(self.cs[c], (ip, ip), omegas, eta, cutoff,
+                                       iterations, functional)
+
+        N = len(self.cs[c].eigenstates)
+
+        tampls = [None]*N
+        for i in xrange(N):
+            tampls[i] = [None]*N
+            for j in xrange(N):
+                tampls[i][j] = amplsmp[i][j] + amplsmm[i][j] + amplspp[i][j]
+
+        return amplsmp, tampls
+
+
+    def occupations(omegas, Vg, V, amplitudes):
+
+        
+        G = np.zeros((N, N))
+
+        for i, aplet in enumerate(self.cs[c].eigenstates):
+            for j, bplet in enumerate(self.cs[c].eigenstates):
+                G[i][j]    
+
+                np.vdot(fermi_selector(omegas - Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
 
     def currents(self, c, im, ip, Ts, Vgs=None, Vs=None,
                  iterations=False, functional=False):
+        """
+        Calculate the current for c'th charge state over a range of
+        bias voltages and backgate voltages.
 
+        Parameters
+        ----------
+        c : int
+            Number of electron in the given charge state.
+        im : int
+            site i where we remove one electron.
+        ip : int
+            site i where we add one electron.
+        Ts : list
+            Temperatures of left and right electrode.
+        Vgs : ndarray
+            List of backgate voltages.
+        Vs : ndarray
+            List of backgate voltages.
+        iterations : int
+            Number of Lanczos iterations to perform.
+        functional : boolean
+            Whether to perform functional or matrix inversion.
+        """
         cutoff = np.max(Vs) + 2*max(Ts)
 
         # calculate omegas
-        omegas = 0
-        eta = 1e-4
+        omegab = np.min([np.min(Vgs)-np.max(Ts), np.min(Vs)-np.max(Ts)])
+        omegat = np.max([np.max(Vgs)+np.max(Ts), np.max(Vs)+np.max(Ts)])
+        omegas = np.linspace(omegab, omegat, 1000)
+        eta = 1e-3  # arbitrary setting
 
-        ampls = Transport.amplitudes(self.cs[c], (im, ip), omegas, eta, cutoff, iterations, functional)
+        self.ampls = Transport.amplitudes(self.cs[c], (im, ip), omegas, eta, cutoff,
+                                          iterations, functional)
 
         curs = np.zeros((len(Vs), len(Vgs)), dtype=np.float64)
+
+        # progress bar
+        progress = pyprind.ProgBar(len(Vs)*len(Vgs),
+                                   monitor=True,
+                                   title="Current")
+
         for i, V in enumerate(Vs):
             for j, Vg in enumerate(Vgs):
-                curs[i, j] = self.current(c, omegas, ampls, im, ip, Ts, Vg, V,
+                curs[i, j] = self.current(c, omegas, self.ampls, im, ip, Ts, Vg, V,
                                           iterations, functional)
+                progress.update()  # update progress bar
 
         return curs
 
     def current(self, c, omegas, ampls, im, ip, Ts, Vg, V,
                 iterations=False, functional=False):
+        """
+        Calculate the current for c'th charge state over a range of omegas
+        based on some pre-calculated amplitudes.
 
+        Parameters
+        ----------
+        c : int
+            Number of electron in the given charge state.
+        omegas : ndarray
+            Array of numbers where we perform the calculation.
+        ampls : Object
+            The continued fraction amplitudes.
+        im : int
+            site i where we remove one electron.
+        ip : int
+            site i where we add one electron.
+        Ts : list
+            Temperatures of left and right electrode.
+        Vg : float64
+            The current backgate voltage.
+        V : float64
+            The current bias voltage.
+        iterations : int
+            Number of Lanczos iterations to perform.
+        functional : boolean
+            Whether to perform functional or matrix inversion.
+        """
         cur = 0
-        for i, aplet in enumerate(self.cs[c].eigenstates):
-            for j, bplet in enumerate(self.cs[c].eigenstates):
-                cur += np.vdot(fermi_selector(omegas - Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
+        # only consider simplest occupation:
+        i = 0
+        aplet = self.cs[c].eigenstates[i]
+        # for i, aplet in enumerate(self.cs[c].eigenstates):
+        for j, bplet in enumerate(self.cs[c].eigenstates):
+            cur += np.vdot(fermi_selector(omegas - Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
 
         return cur
 
@@ -210,7 +322,7 @@ class Transport:
         curs = self.currents(c, im, ip, Ts, Vgs, Vs,
                              iterations, functional)
 
-        return np.diff(curs, axis=1)
+        return (Vgs, Vs, np.diff(curs, axis=1))
 
     def zerobias(self, c, im, ip, Ts, iterations=False, functional=False):
 
