@@ -489,29 +489,30 @@ class Graph:
         visited = [False]*N  # mark visited sites
         visited[0] = True
 
-        branches = []
-        asches = [[0]]
+        branches = []  # list of traversed branches
+        asches = [[0]]  # list of current branches
         while not all(visited):
+            # print(visited)
             ches = []
-            for branch in asches:
+            for branch in asches:  # for each of the current branches
                 hits = list(links[links[:, 0] == branch[-1], 1]) \
                     + list(links[links[:, 1] == branch[-1], 0])
-                if len(hits) <= 2:
-                    branches.append(branch)
-                else:
-                    for hit in set(hits):
-                        if not visited[hit]:
-                            ches.append(branch + [hit])
-                            visited[hit] = True
-                        elif len(branch) > 1 and branch[-2] != hit:
-                            branches.append(branch + [hit])
+                # if len(hits) <= 2:
+                #     branches.append(branch)
+                # else:
+                for hit in set(hits):  # repeat for all unique hits
+                    if not visited[hit]:  # if the hit has not been visited before
+                        ches.append(branch + [hit])
+                        visited[hit] = True
+                    elif len(branch) > 1 and branch[-2] != hit:
+                        branches.append(branch + [hit])
             asches = ches
         branches += asches
 
         endtwo = [branch[-2] for branch in branches]
         endone = [branch[-1] for branch in branches]
 
-        cycles = []
+        cycles = []  # list of cycles
         Nb = len(branches)
         appended = [False]*Nb
         for i in xrange(Nb):

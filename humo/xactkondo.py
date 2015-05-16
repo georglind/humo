@@ -8,43 +8,45 @@ class Kondo:
         return True
 
     def lnTkD(JLL, JLR, JRR):
+        """
+        Return natural log of the Kondo temperatures.
+        """
+        g0 = (JLL + JRR)/2
+
+        nx = np.real(JLR)
+        ny = np.imag(JLR)
+        nz = (JLL - JRR)/2
+        n = np.sqrt(nx**2 + ny**2 + nz**2)
+
+        lnT1 = -1/(g0+n)
+        lnT2 = -1/(g0-n)
+
+        return lnT1, lnT2
+
         return True
-
-        # function [T1 T2] = lnTkD(JLL,JLR,JRR)
-        #     %  g0
-        #     g0 = (JLL+JRR)./2;
-        #     %  n
-        #     nx = real(JLR);
-        #     ny = imag(JLR);
-        #     nz = (JLL-JRR)./2;
-        #     n = sqrt(nx.^2+ny.^2+nz.^2);
-
-        #     % Kondo temperatures
-        #     T1 = -1./(g0+n);
-        #     T2 = -1./(g0-n);
-        # end
 
     def poor_mans_scaling(T, JLL, JLR, JRR):
-        return True
-        # function [JsLL,JsLR,JsRR] = scaling(T,JLL,JLR,JRR)
+        """
+        Return results of Poor man scaling over energy range T
+        """
+        g0 = (JLL + JRR)/2
 
-        #     g0 = (JLL+JRR)/2;
-        #     nx = real(JLR);
-        #     ny = imag(JLR);
-        #     nz = (JLL-JRR)/2;
-        #     n = sqrt(nx^2+ny^2+nz^2);
+        nx = np.real(JLR)
+        ny = np.imag(JLR)
+        nz = (JLL - JRR)/2
+        n = np.sqrt(nx**2 + ny**2 + nz**2)
 
-        #     sinphi = nx/n;
-        #     cosphi = nz/n
+        sinphi = nx/n
+        cosphi = nz/n
 
-        #     T1 = exp(-1./(g0+n))
-        #     T2 = exp(-1./(g0-n))
+        T1 = np.exp(-1/(g0+n))
+        T2 = np.exp(-1/(g0-n))
 
-        #     g0s = 1/2*(1./log(T./T1)+1./log(T./T2));
-        #     ns  = 1/2*(1./log(T./T1)-1./log(T./T2));
+        g0s = (1/np.log(T/T1)+1/np.log(T/T2))/2
+        ns = (1/np.log(T/T1)-1/np.log(T/T2))/2
 
-        #     JsLR = ns.*sinphi;
-        #     JsRR = (g0s-ns.*cosphi);
-        #     JsLL = (g0s+ns.*cosphi);
+        JLRs = ns*sinphi
+        JRRs = g0s-ns*cosphi
+        JLLs = g0s+ns*cosphi
 
-        # end
+        return JLLs, JLRs, JRRs

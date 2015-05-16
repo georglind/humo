@@ -342,7 +342,7 @@ class SzState:
 
         if nu > n or nd > n:
             H = np.zeros((1, 1))
-            return lita, (H, H, H)
+            return lita, (H, H, np.zeros((1,)))
 
         # hopping for spin up
         HTu = SzState.hopping_hamiltonian(lita.basisu, lita.Juv, humo.H1T,
@@ -393,8 +393,7 @@ class SzState:
         nd = ne-nu
 
         if nu > n or nd > n:
-            H = np.array([0])
-            return H
+            return np.zeros((1,), dtype=np.float64 if real else np.complex128)
 
         lita = lin.Table(n, nu, nd)
         Nu, Nd = lita.Ns

@@ -32,12 +32,14 @@ def fermi_selector(Es, dE, V, Ts):
     TL, TR = Ts
 
     # fermi functions
-    FL = fermi_function(Es, VL, TL)
-    FR = fermi_function(Es, VR, TR)
-    FdL = fermi_function(Es + dE, VL, TL)
-    FdR = fermi_function(Es + dE, VR, TR)
+    # FL = fermi_function(Es, VL, TL)
+    # FR = fermi_function(Es, VR, TR)
+    # FdL = fermi_function(Es + dE, VL, TL)
+    # FdR = fermi_function(Es + dE, VR, TR)
 
-    return (1-FdR)*FL - (1-FdL)*FR
+    # return (1-FdR)*FL - (1-FdL)*FR
+    return (1 - 1/(np.exp((Es+dE-VR)/TR)+1))*1/(np.exp((Es-VL)/TL)+1) - \
+           (1 - 1/(np.exp((Es+dE-VL)/TL)+1))*1/(np.exp((Es-VR)/TR)+1)
 
 
 class Transport:
@@ -60,7 +62,7 @@ class Transport:
         E0 = self.cs[c].eigenstates[0]['E']
         Ep = self.cs[c+1].eigenstates[0]['E']
 
-        return (E0 - Ep, Em - E0)
+        return (E0 - Em, Ep - E0)
 
     def bias(self, c):
         """
@@ -156,7 +158,7 @@ class Transport:
 
     def amplitudess(self, c, imp, eta, cutoff, iterations, functional=False):
         """
-        Solves the occupations from rate equations
+        Calculate the cotunneling amplitudes for processes within the same charge state.
         """
         im, ip = imp
 
@@ -182,20 +184,24 @@ class Transport:
 
         return amplsmp, tampls
 
+    def occupations(self, c, omegas, Vg, V, amplitudes):
+        """
+        Calculate the occupations from rate equations an cotunneling amplitudes
+        """
+        N = len(self.cs[c].eigenstates)  # number of state
 
-    def occupations(omegas, Vg, V, amplitudes):
-
-        
-        G = np.zeros((N, N))
-
+        rates = np.zeros((N, N))  # rates matrix
+        # fill rates matrix
         for i, aplet in enumerate(self.cs[c].eigenstates):
             for j, bplet in enumerate(self.cs[c].eigenstates):
-                G[i][j]    
+                rates[i][j] = np.vdot(fermi_selector(omegas + Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
 
-                np.vdot(fermi_selector(omegas - Vg, aplet['E'] - bplet['E'], V, Ts), ampls[i][j])
+        rateq = rates - np.diag(np.sum(rates, axis=0))
+        p = np.linalg.null(rateq)
+        return p
 
     def currents(self, c, im, ip, Ts, Vgs=None, Vs=None,
-                 iterations=False, functional=False):
+                 cache=True, iterations=False, functional=False):
         """
         Calculate the current for c'th charge state over a range of
         bias voltages and backgate voltages.
@@ -219,16 +225,34 @@ class Transport:
         functional : boolean
             Whether to perform functional or matrix inversion.
         """
-        cutoff = np.max(Vs) + 2*max(Ts)
+        cutoff = 1e4
+        # np.max(Vs) + 10*max(Ts)
 
         # calculate omegas
-        omegab = np.min([np.min(Vgs)-np.max(Ts), np.min(Vs)-np.max(Ts)])
-        omegat = np.max([np.max(Vgs)+np.max(Ts), np.max(Vs)+np.max(Ts)])
-        omegas = np.linspace(omegab, omegat, 1000)
+        omegab = np.min([np.min(Vgs), np.min(Vs)]) - np.max(Ts)
+        omegat = np.max([np.max(Vgs), np.max(Vs)]) + np.max(Ts)
+
+        N = 2*np.round((omegat-omegab)/np.min(Ts))
+
+        omegas = np.linspace(omegab, omegat, N)
         eta = 1e-3  # arbitrary setting
 
-        self.ampls = Transport.amplitudes(self.cs[c], (im, ip), omegas, eta, cutoff,
-                                          iterations, functional)
+        # Recache if the cache is empty
+        if not hasattr(self, 'ampls'):
+            cache = False
+
+        # Recache if the former sampling was too small for the current
+        # calculation
+        if hasattr(self, 'omegas'):
+            if (self.omegas[0] > omegas[0]
+               or self.omegas[-1] < omegas[-1]
+               or len(self.omegas) < len(omegas)):
+                cache = False
+
+        if cache is False:
+            self.omegas = omegas
+            self.ampls = Transport.amplitudes(self.cs[c], (im, ip), self.omegas, eta, cutoff,
+                                              iterations, functional)
 
         curs = np.zeros((len(Vs), len(Vgs)), dtype=np.float64)
 
@@ -239,7 +263,7 @@ class Transport:
 
         for i, V in enumerate(Vs):
             for j, Vg in enumerate(Vgs):
-                curs[i, j] = self.current(c, omegas, self.ampls, im, ip, Ts, Vg, V,
+                curs[i, j] = self.current(c, self.omegas, self.ampls, im, ip, Ts, Vg, V,
                                           iterations, functional)
                 progress.update()  # update progress bar
 
@@ -284,15 +308,18 @@ class Transport:
 
         return cur
 
+
+class Diamond(Transport):
+
     def diamond(self, c, im, ip, Ts, Vgs=None, Vs=None,
-                iterations=False, functional=False):
+                cache=True, iterations=False, functional=False):
         """
         Calculate the Coulomb diamond for the c'th charge state
 
         Parameters
         ----------
         c : int
-            Number of electrons in given charge state
+            Number of electrons in the given charge state
         im : int
             site i where we remove one electron
         ip : int
@@ -320,13 +347,51 @@ class Transport:
             Ts = [Ts, Ts]
 
         curs = self.currents(c, im, ip, Ts, Vgs, Vs,
-                             iterations, functional)
+                             cache, iterations, functional)
 
-        return (Vgs, Vs, np.diff(curs, axis=1))
+        return (Vgs, Vs, curs)
 
-    def zerobias(self, c, im, ip, Ts, iterations=False, functional=False):
+    def zerobias(self, c, im, ip, Ts, Vgs=None, Vs=None, 
+                 iterations=False, functional=False):
 
-        return self.diamond(c, im, ip, Ts, Vs=np.array([0, 1e-4]),
+        # defaults
+        if Vs is None:
+            Vs = np.array([0, 1e-4])
+
+        # recast as numpy array
+        if isinstance(Vs, list):
+            Vs = np.array(Vs)
+
+        return self.diamond(c, im, ip, Ts, Vgs=Vgs, Vs=Vs,
                             iterations=iterations, functional=functional)
+
+
+import scipy.optimize as optimize
+import scipy.interpolate as interpolate
+
+
+class ThermoVoltage(Diamond):
+
+    def signal(self, c, im, ip, Ts, Vgs=None, Vs=None,
+               cache=True, iterations=False, functional=False):
+        """
+        The ThermoVoltage signal
+        """
+        # Find the signal
+        Vgs, Vs, curs = self.diamond(c, im, ip, Ts, Vgs=Vgs, Vs=Vs,
+                                     cache=cache,
+                                     iterations=iterations,
+                                     functional=functional)
+
+        Tv = np.zeros(Vgs.shape)
+        for i, Vg in enumerate(Vgs):
+            ff = interpolate.interp1d(Vs, curs[:, i], kind='cubic')
+            Tv[i] = optimize.brentq(ff, np.min(Vs), np.max(Vs))  #, 1e-4*np.max(Vs))
+            # idx = (curs[:, i] >= 0).argmax()
+            # Tv[i] = Vs[idx]
+
+        return Vgs, Tv
+
+
 
 # humo.HubbardModel.transport = transport

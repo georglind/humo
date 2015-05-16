@@ -244,10 +244,13 @@ def amplitude(omegas, energies, eta, pes, ipes):
 
     A = B = 0
     # for i, _ in xange(len(pes)):
-    A += amplitude_real(omegas + Epes, etas[0], pes) - \
-        amplitude_real(-omegas + Eipes, etas[1], ipes)
-    B += amplitude_imag(omegas + Epes, etas[0], pes) - \
-        amplitude_imag(-omegas + Eipes, etas[1], ipes)
+    if pes is not None:
+        A += amplitude_real(omegas + Epes, etas[0], pes)
+        B += amplitude_imag(omegas + Epes, etas[0], pes)
+
+    if ipes is not None:
+        A += -amplitude_real(-omegas + Eipes, etas[1], ipes)
+        B += -amplitude_imag(-omegas + Eipes, etas[1], ipes)
 
     return np.abs(A)**2 + np.abs(B)**2
 
@@ -483,53 +486,57 @@ def potential_coefficients(chs, ns, ketL, ketR, im, ip,
     W = [None]*4
 
     # Add spin up and remove spin up
-    dR = (1, ip, 1)
-    dL = (-1, im, 1)
+    if ns[0] + 1 <= chs.humo.n:
+        dR = (1, ip, 1)
+        dL = (-1, im, 1)
 
-    nu, nd = ns[0] + 1, ns[1]
+        nu, nd = ns[0] + 1, ns[1]
 
-    _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-    W[0] = coefficients(ketL, dL, Hm, dR, ketR,
-                        iterations=iterations, real=chs.humo.real,
-                        functional=functional, same_kets=True)
+        W[0] = coefficients(ketL, dL, Hm, dR, ketR,
+                            iterations=iterations, real=chs.humo.real,
+                            functional=functional, same_kets=True)
 
     # Remove spin down and add spin down
-    dR = (-1, im, -1)
-    dL = (1, ip, -1)
+    if ns[1] > 0:
+        dR = (-1, im, -1)
+        dL = (1, ip, -1)
 
-    nu, nd = ns[0], ns[1] - 1
+        nu, nd = ns[0], ns[1] - 1
 
-    _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-    W[3] = coefficients(ketL, dL, Hm, dR, ketR,
-                        iterations=iterations, real=chs.humo.real,
-                        functional=functional, same_kets=True)
+        W[3] = coefficients(ketL, dL, Hm, dR, ketR,
+                            iterations=iterations, real=chs.humo.real,
+                            functional=functional, same_kets=True)
 
     if ns[0] != ns[1]:
         # Add spin down and remove spin down
-        dR = (1, ip, -1)
-        dL = (-1, im, -1)
+        if ns[1] + 1 <= chs.humo.n:
+            dR = (1, ip, -1)
+            dL = (-1, im, -1)
 
-        nu, nd = ns[0], ns[1] + 1
+            nu, nd = ns[0], ns[1] + 1
 
-        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+            _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-        W[1] = coefficients(ketL, dL, Hm, dR, ketR,
-                            iterations=iterations, real=chs.humo.real,
-                            functional=functional, same_kets=True)
+            W[1] = coefficients(ketL, dL, Hm, dR, ketR,
+                                iterations=iterations, real=chs.humo.real,
+                                functional=functional, same_kets=True)
 
         # Remove spin up and add spin up
-        dR = (-1, im, 1)
-        dL = (1, ip, 1)
+        if ns[0] > 0:
+            dR = (-1, im, 1)
+            dL = (1, ip, 1)
 
-        nu, nd = ns[0] - 1, ns[1]
+            nu, nd = ns[0] - 1, ns[1]
 
-        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+            _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-        W[2] = coefficients(ketL, dL, Hm, dR, ketR,
-                            iterations=iterations, real=chs.humo.real,
-                            functional=functional, same_kets=True)
+            W[2] = coefficients(ketL, dL, Hm, dR, ketR,
+                                iterations=iterations, real=chs.humo.real,
+                                functional=functional, same_kets=True)
 
     return W
 
@@ -565,28 +572,30 @@ def exchange_coefficients(chs, ns, ketL, ketR, im, ip,
     J = [None]*2
 
     # Add a spin up and remove a spin down
-    dR = (1, ip, 1)     # add a spin up on ketR
-    dL = (-1, im, -1)   # remove a spin down on ketL
+    if ns[1] <= chs.humo.n:
+        dR = (1, ip, 1)     # add a spin up on ketR
+        dL = (-1, im, -1)   # remove a spin down on ketL
 
-    nu, nd = ns[0] + 1, ns[1]
+        nu, nd = ns[0] + 1, ns[1]
 
-    _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-    J[0] = coefficients(ketL, dL, Hm, dR, ketR,
-                        iterations=iterations, real=chs.humo.real,
-                        functional=functional, same_kets=False)
+        J[0] = coefficients(ketL, dL, Hm, dR, ketR,
+                            iterations=iterations, real=chs.humo.real,
+                            functional=functional, same_kets=False)
 
     # Remove a spin down and add a spin up
-    dR = (-1, im, -1)   # remove a spin down on ketR
-    dL = (1, ip, 1)     # add a spin up on ketL
+    if ns[1] > 0:
+        dR = (-1, im, -1)   # remove a spin down on ketR
+        dL = (1, ip, 1)     # add a spin up on ketL
 
-    nu, nd = ns[0], ns[1] - 1
+        nu, nd = ns[0], ns[1] - 1
 
-    _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
+        _, Hm = xore.SzState.hamiltonian(chs.humo, nu + nd, nu, functional)
 
-    J[1] = coefficients(ketL, dL, Hm, dR, ketR,
-                        iterations=iterations, real=chs.humo.real,
-                        functional=functional, same_kets=False)
+        J[1] = coefficients(ketL, dL, Hm, dR, ketR,
+                            iterations=iterations, real=chs.humo.real,
+                            functional=functional, same_kets=False)
 
     return J
 
